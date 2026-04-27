@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BAC Estimator — Widmark Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0d0a;
+    --paper: #f4ede1;
+    --ink: #1a1814;
+    --rust: #c0492a;
+    --amber: #d9a441;
+    --moss: #5a6f4e;
+    --line: rgba(26, 24, 20, 0.18);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); }
+  body {
+    font-family: 'Fraunces', serif;
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 24px 16px 80px;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(217, 164, 65, 0.08), transparent 40%),
+      radial-gradient(circle at 80% 90%, rgba(192, 73, 42, 0.06), transparent 40%),
+      var(--bg);
+  }
+  .frame {
+    max-width: 540px;
+    margin: 0 auto;
+    background: var(--paper);
+    border-radius: 4px;
+    padding: 32px 28px;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.5);
+    position: relative;
+    overflow: hidden;
+  }
+  .frame::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.08 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    mix-blend-mode: multiply;
+  }
+  .frame > * { position: relative; }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--rust);
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+  }
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 800;
+    font-style: italic;
+    font-size: clamp(34px, 9vw, 48px);
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+  h1 .ital { font-style: italic; color: var(--rust); }
+  .subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: rgba(26,24,20,0.6);
+    margin-bottom: 28px;
+    letter-spacing: 0.05em;
+  }
+
+  .reading {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 24px 20px;
+    border-radius: 2px;
+    margin-bottom: 28px;
+    text-align: center;
+    position: relative;
+  }
+  .reading-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--amber);
+    margin-bottom: 8px;
+  }
+  .bac-value {
+    font-family: 'Fraunces', serif;
+    font-weight: 800;
+    font-size: 64px;
+    line-height: 1;
+    letter-spacing: -0.04em;
+  }
+  .bac-unit {
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    color: rgba(244, 237, 225, 0.5);
+    margin-top: 4px;
+    letter-spacing: 0.1em;
+  }
+  .status {
+    margin-top: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    padding: 6px 12px;
+    display: inline-block;
+    border: 1px solid currentColor;
+    border-radius: 1px;
+  }
+  .status.safe { color: var(--moss); }
+  .status.warn { color: var(--amber); }
+  .status.danger { color: var(--rust); }
+
+  .driving-time {
+    margin-top: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: rgba(244, 237, 225, 0.7);
+    letter-spacing: 0.05em;
+  }
+  .driving-time strong {
+    color: var(--paper);
+    font-weight: 700;
+  }
+
+  .field {
+    margin-bottom: 20px;
+  }
+  .field-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .field-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+  }
+  .field-value {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 20px;
+    font-feature-settings: 'tnum';
+  }
+  .field-value .unit {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: rgba(26,24,20,0.5);
+    margin-left: 4px;
+    font-weight: 400;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 2px;
+    background: var(--ink);
+  }
+  input[type="range"]::-moz-range-track {
+    height: 2px;
+    background: var(--ink);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 22px;
+    width: 22px;
+    border-radius: 50%;
+    background: var(--rust);
+    margin-top: -10px;
+    border: 3px solid var(--paper);
+    box-shadow: 0 2px 0 var(--ink);
+  }
+  input[type="range"]::-moz-range-thumb {
+    height: 22px;
+    width: 22px;
+    border-radius: 50%;
+    background: var(--rust);
+    border: 3px solid var(--paper);
+    box-shadow: 0 2px 0 var(--ink);
+  }
+
+  .seg-group {
+    display: flex;
+    border: 1px solid var(--ink);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .seg-group label {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    border-right: 1px solid var(--ink);
+  }
+  .seg-group label:last-child { border-right: none; }
+  .seg-group input { display: none; }
+  .seg-group input:checked + label,
+  .seg-group label.active {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  .timeline {
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px dashed var(--line);
+  }
+  .timeline-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: rgba(26,24,20,0.6);
+    margin-bottom: 16px;
+  }
+  .chart {
+    width: 100%;
+    height: 140px;
+    display: block;
+  }
+
+  .formula {
+    margin-top: 24px;
+    padding: 16px;
+    background: rgba(26,24,20,0.04);
+    border-left: 3px solid var(--rust);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.7;
+    color: rgba(26,24,20,0.75);
+  }
+  .formula strong { color: var(--ink); }
+
+  .disclaimer {
+    margin-top: 20px;
+    font-size: 12px;
+    line-height: 1.5;
+    font-style: italic;
+    color: rgba(26,24,20,0.7);
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+  }
+
+  .footer-mark {
+    margin-top: 24px;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    color: rgba(26,24,20,0.4);
+  }
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <div class="eyebrow">
+    <span>Widmark Model</span>
+    <span id="time-now">—</span>
+  </div>
+
+  <h1>Blood<br>Alcohol <span class="ital">Estimator</span></h1>
+  <div class="subtitle">// drag to adjust • estimate only</div>
+
+  <div class="reading">
+    <div class="reading-label">Estimated BAC at drive time</div>
+    <div class="bac-value" id="bac-out">0.0</div>
+    <div class="bac-unit">‰ (per mille)</div>
+    <div id="bac-range" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:rgba(244,237,225,0.55); margin-top:6px; letter-spacing:0.08em;">range — — —</div>
+    <div id="extreme-warn" style="display:none; margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.12em; color:#c0492a; border:1px solid #c0492a; border-radius:1px; padding:6px 10px; line-height:1.5;">
+      ⚠ CRITICALLY HIGH — values above 3‰ are life-threatening
+    </div>
+    <div class="status safe" id="status">— BELOW 0.3‰ —</div>
+    <div class="driving-time" id="drive-info">at <strong>16:30</strong></div>
+    <div id="absorption-warn" style="display:none; margin-top:12px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.12em; color:#d9a441; border:1px solid #d9a441; border-radius:1px; padding:6px 10px; line-height:1.5;">
+      ⚠ STILL ABSORBING — peak BAC may be higher and still rising
+    </div>
+    <div id="wait-info" style="display:none; margin-top:14px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.10em; color:rgba(244,237,225,0.8); line-height:1.8; border-top:1px solid rgba(244,237,225,0.15); padding-top:12px;">
+      <span id="wait-text"></span>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-header">
+      <span class="field-label">Body weight</span>
+      <span class="field-value"><span id="weight-val">75</span><span class="unit">kg</span></span>
+    </div>
+    <input type="range" id="weight" min="45" max="130" value="75" step="1">
+  </div>
+
+  <div class="field">
+    <div class="field-header">
+      <span class="field-label">Sex</span>
+    </div>
+    <div class="seg-group" id="sex-group">
+      <input type="radio" name="sex" id="sex-m" value="0.68" checked><label for="sex-m">Male</label>
+      <input type="radio" name="sex" id="sex-f" value="0.55"><label for="sex-f">Female</label>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-header">
+      <span class="field-label">Driver category</span>
+    </div>
+    <div class="seg-group" id="category-group">
+      <input type="radio" name="category" id="cat-std" value="0.5" checked><label for="cat-std">Standard</label>
+      <input type="radio" name="category" id="cat-pro" value="0.2"><label for="cat-pro">New / Commercial</label>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-header">
+      <span class="field-label">Stomach contents</span>
+    </div>
+    <div class="seg-group" id="food-group">
+      <input type="radio" name="food" id="food-empty" value="1.00" checked><label for="food-empty">Empty</label>
+      <input type="radio" name="food" id="food-light" value="0.85"><label for="food-light">Light meal</label>
+      <input type="radio" name="food" id="food-full" value="0.70"><label for="food-full">Full meal</label>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-header">
+      <span class="field-label">Metabolism rate</span>
+    </div>
+    <div class="seg-group" id="beta-group">
+      <input type="radio" name="beta" id="beta-avg" value="0.15" checked><label for="beta-avg">Average (0.15‰/h)</label>
+      <input type="radio" name="beta" id="beta-low" value="0.10"><label for="beta-low">Slow (0.10‰/h)</label>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-header">
+      <span class="field-label">Number of drinks</span>
+      <span class="field-value"><span id="count-val">4</span><span class="unit" id="count-unit"></span></span>
+    </div>
+    <div class="seg-group" style="margin-bottom:10px;">
+      <input type="radio" name="drink-mode" id="dm-total" value="total" checked><label for="dm-total">Total</label>
+      <input type="radio" name="drink-mode" id="dm-rate" value="rate"><label for="dm-rate">Per hour</label>
+    </div>
+    <input type="range" id="count" min="0" max="10" value="4" step="1">
+    <div id="dph-row" style="display:none;">
+      <input type="range" id="dph" min="0.5" max="4" value="1" step="0.5">
+      <div id="dph-derived" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:rgba(26,24,20,0.55); margin-top:6px; letter-spacing:0.08em;"></div>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-header">
+      <span class="field-label">Drink volume</span>
+      <span class="field-value"><span id="vol-val">33</span><span class="unit">cl</span></span>
+    </div>
+    <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap;">
+      <button onclick="setDrink(33,5)" style="font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.1em; text-transform:uppercase; background:transparent; border:1px solid rgba(26,24,20,0.3); border-radius:1px; padding:4px 8px; cursor:pointer; color:rgba(26,24,20,0.7);">Beer 33cl/5%</button>
+      <button onclick="setDrink(50,5)" style="font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.1em; text-transform:uppercase; background:transparent; border:1px solid rgba(26,24,20,0.3); border-radius:1px; padding:4px 8px; cursor:pointer; color:rgba(26,24,20,0.7);">Beer 50cl/5%</button>
+      <button onclick="setDrink(15,13)" style="font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.1em; text-transform:uppercase; background:transparent; border:1px solid rgba(26,24,20,0.3); border-radius:1px; padding:4px 8px; cursor:pointer; color:rgba(26,24,20,0.7);">Wine 15cl/13%</button>
+      <button onclick="setDrink(4,40)" style="font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.1em; text-transform:uppercase; background:transparent; border:1px solid rgba(26,24,20,0.3); border-radius:1px; padding:4px 8px; cursor:pointer; color:rgba(26,24,20,0.7);">Spirit 4cl/40%</button>
+    </div>
+    <input type="range" id="vol" min="20" max="60" value="33" step="1">
+  </div>
+
+  <div class="field">
+    <div class="field-header">
+      <span class="field-label">Alcohol %</span>
+      <span class="field-value"><span id="abv-val">5.0</span><span class="unit">% ABV</span></span>
+    </div>
+    <input type="range" id="abv" min="3" max="45" value="5" step="0.5">
+  </div>
+
+  <div class="field">
+    <div class="field-header">
+      <span class="field-label">Drinking start</span>
+      <span class="field-value" id="start-val">12:30</span>
+    </div>
+    <input type="range" id="start" min="0" max="1439" value="750" step="15">
+  </div>
+
+  <div class="field">
+    <div class="field-header">
+      <span class="field-label">Drive time</span>
+      <span class="field-value" id="drive-val">16:30</span>
+    </div>
+    <input type="range" id="drive" min="0" max="1439" value="990" step="15">
+  </div>
+
+  <div class="timeline">
+    <div class="timeline-title">BAC over time ‰</div>
+    <svg class="chart" id="chart" viewBox="0 0 500 140" preserveAspectRatio="none"></svg>
+  </div>
+
+  <div class="formula">
+    <strong>Widmark:</strong> BAC = (A / (r × W)) − (β × t)<br>
+    where A = grams of alcohol × food factor, r = body water constant<br>
+    (♂ 0.68, ♀ 0.55), W = kg, β = 0.10–0.15‰/h elimination
+  </div>
+
+  <div class="disclaimer">
+    This is a rough statistical estimate. Real BAC depends on food, hydration, sleep, medication, and individual metabolism — variation between people can easily be ±30%. The plausible range above reflects this uncertainty; never rely on the lower bound.
+    <br><br>
+    Measurable impairment in reaction time and divided attention begins around 0.2‰ — well below the 0.5‰ legal limit. Driving while visibly impaired is illegal under færdselsloven § 54 regardless of BAC.
+    <br><br>
+    Denmark's legal limit is 0.5‰ (standard licence). The legally valid measurements are an evidential breath test (alkomat) or blood test — roadside screening is preliminary only. If there is any doubt, do not drive.
+  </div>
+
+  <div class="footer-mark">— EST. SAFETY MARGIN ADVISED —</div>
+  <div style="margin-top:12px; font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.12em; color:rgba(26,24,20,0.45); line-height:1.6; text-align:center;">
+    Model accuracy is further reduced by: age (older adults have lower body water, higher BAC) · dehydration (raises effective BAC) · carbonated drinks (faster absorption) · certain medications (metformin, antihistamines, antidepressants). When any of these apply, treat the upper bound of the range as your reference.
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  function fmtTime(mins) {
+    const h = Math.floor(mins / 60) % 24;
+    const m = mins % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  }
+
+  function setDrink(cl, abvPct) {
+    $('vol').value = cl;
+    $('abv').value = abvPct;
+    compute();
+  }
+
+  function computeBACAtTime(t, drinks, gramsPerDrink, r, W, beta) {
+    // t: hours since first drink
+    // drinks: array of drink times in hours since first drink
+    const T_abs = 0.5;
+    let absorbed = 0;
+    for (const t_i of drinks) {
+      if (t >= t_i) {
+        const elapsed = t - t_i;
+        absorbed += gramsPerDrink * (1 - Math.exp(-Math.LN2 * elapsed / T_abs));
+      }
+    }
+    const bac = (absorbed / (r * W)) - (beta * t);
+    return Math.max(0, bac);
+  }
+
+  function buildDrinkSchedule(n, D) {
+    // Returns array of drink times (hours since first drink)
+    if (n === 0) return [];
+    if (n === 1) return [0];
+    return Array.from({length: n}, (_, i) => i * D / (n - 1));
+  }
+
+  function compute() {
+    const W = +$('weight').value;
+    const r = +document.querySelector('input[name="sex"]:checked').value;
+    const legalLimit = +document.querySelector('input[name="category"]:checked').value;
+    const foodFactor = +document.querySelector('input[name="food"]:checked').value;
+    const beta = +document.querySelector('input[name="beta"]:checked').value;
+    const vol = +$('vol').value; // cl
+    const abv = +$('abv').value; // %
+    const startMin = +$('start').value;
+    const driveMin = +$('drive').value;
+
+    // hours from start to drive (handle wrap) — must come before n so rate mode can use drinkingWindow
+    let dt = (driveMin - startMin) / 60;
+    if (dt < 0) dt += 24;
+    const drinkingWindow = Math.min(dt, 4);
+
+    // Derive n from whichever input mode is active
+    const drinkMode = document.querySelector('input[name="drink-mode"]:checked').value;
+    let n, dph;
+    if (drinkMode === 'rate') {
+      dph = +$('dph').value;
+      n = drinkingWindow > 0 ? Math.max(1, Math.round(dph * drinkingWindow)) : 1;
+    } else {
+      n = +$('count').value;
+    }
+
+    // Sync slider visibility
+    const isRate = drinkMode === 'rate';
+    $('count').style.display = isRate ? 'none' : 'block';
+    $('dph-row').style.display = isRate ? 'block' : 'none';
+
+    // grams of pure alcohol per drink, with food attenuation applied
+    const gramsPerDrink = vol * 10 * (abv / 100) * 0.789 * foodFactor;
+    const A = n * gramsPerDrink;
+
+    const drinks = buildDrinkSchedule(n, drinkingWindow);
+
+    let bac = computeBACAtTime(dt, drinks, gramsPerDrink, r, W, beta);
+    if (Object.is(bac, -0)) bac = 0;
+
+    // Scan t=0..8h in 5-min steps to find peak BAC and the time it occurs
+    let peakBAC = 0, peakT = 0;
+    if (n > 0) {
+      for (let ti = 0; ti <= 8 * 60; ti += 5) {
+        const th = ti / 60;
+        const b = computeBACAtTime(th, drinks, gramsPerDrink, r, W, beta);
+        if (b > peakBAC) { peakBAC = b; peakT = th; }
+      }
+    }
+
+    // Time (hours after first drink) when BAC drops below legalLimit after the peak
+    let safeT = null;
+    if (n > 0 && peakBAC > legalLimit) {
+      for (let ti = Math.ceil(peakT * 12) / 12; ti <= 24; ti += 1/12) {
+        const b = computeBACAtTime(ti, drinks, gramsPerDrink, r, W, beta);
+        if (b < legalLimit) { safeT = ti; break; }
+      }
+    }
+
+    // Display wait info
+    const waitDiv = $('wait-info');
+    const waitText = $('wait-text');
+    if (n === 0) {
+      waitDiv.style.display = 'none';
+    } else if (peakBAC <= legalLimit) {
+      waitDiv.style.display = 'block';
+      waitText.innerHTML = `Peak est. <strong>${peakBAC.toFixed(2)}‰</strong> — below the ${legalLimit.toFixed(1)}‰ limit throughout`;
+    } else if (safeT !== null) {
+      const safeAbsMin = (startMin + Math.ceil(safeT * 60)) % 1440;
+      const safeTimeStr = fmtTime(safeAbsMin);
+      const waitHours = Math.max(0, safeT - dt);
+      const waitH = Math.floor(waitHours);
+      const waitM = Math.round((waitHours - waitH) * 60);
+      const waitStr = waitH > 0 ? `${waitH}h ${waitM}m` : `${waitM}m`;
+      if (dt < peakT) {
+        waitText.innerHTML = `⚠ Drive time is before estimated peak of <strong>${peakBAC.toFixed(2)}‰</strong> at +${peakT.toFixed(1)}h<br>Safe after ${legalLimit.toFixed(1)}‰: <strong>${safeTimeStr}</strong> (wait approx. ${waitStr} from drive time)`;
+      } else {
+        waitText.innerHTML = `Peak est. <strong>${peakBAC.toFixed(2)}‰</strong> — safe after ${legalLimit.toFixed(1)}‰ at approx. <strong>${safeTimeStr}</strong> (${waitStr} from now)`;
+      }
+      waitDiv.style.display = 'block';
+    } else {
+      waitDiv.style.display = 'block';
+      waitText.innerHTML = `Peak est. <strong>${peakBAC.toFixed(2)}‰</strong> — does not drop below ${legalLimit.toFixed(1)}‰ within 24h at this intake`;
+    }
+
+    // Update UI
+    $('weight-val').textContent = W;
+    if (isRate) {
+      $('count-val').textContent = dph.toFixed(1);
+      $('count-unit').textContent = ' /hr';
+      $('dph-derived').textContent = `≈ ${n} drink${n !== 1 ? 's' : ''} total`;
+    } else {
+      $('count-val').textContent = n;
+      $('count-unit').textContent = '';
+    }
+    $('vol-val').textContent = vol;
+    $('abv-val').textContent = abv.toFixed(1);
+    $('start-val').textContent = fmtTime(startMin);
+    $('drive-val').textContent = fmtTime(driveMin);
+    $('bac-out').textContent = bac.toFixed(1);
+    const lo = (bac * 0.70).toFixed(1);
+    const hi = (bac * 1.30).toFixed(1);
+    $('bac-range').textContent = bac > 0 ? `plausible range ${lo}–${hi}‰` : 'range — — —';
+
+    $('extreme-warn').style.display = peakBAC > 3 ? 'block' : 'none';
+
+    $('drive-info').innerHTML = `at <strong>${fmtTime(driveMin)}</strong>`;
+
+    // Absorption phase warning: if drive time is within 90 min of start
+    const absWarn = $('absorption-warn');
+    if (n > 0 && dt < 1.5) {
+      absWarn.style.display = 'block';
+    } else {
+      absWarn.style.display = 'none';
+    }
+
+    const status = $('status');
+    status.classList.remove('safe', 'warn', 'danger');
+    if (bac < legalLimit * 0.6) {
+      status.classList.add('safe');
+      status.textContent = `— BELOW ${(legalLimit * 0.6).toFixed(1)}‰ —`;
+    } else if (bac < legalLimit) {
+      status.classList.add('warn');
+      status.textContent = `— MARGINAL — DO NOT ASSUME SAFE —`;
+    } else {
+      status.classList.add('danger');
+      status.textContent = `— OVER ${legalLimit.toFixed(1)}‰ LIMIT —`;
+    }
+
+    drawChart(A, r, W, beta, startMin, driveMin, legalLimit, drinks, gramsPerDrink, peakBAC, peakT);
+  }
+
+  function drawChart(A, r, W, beta, startMin, driveMin, legalLimit = 0.5, drinks = [], gramsPerDrink = 0, peakBAC = 0, peakT = 0) {
+    const svg = $('chart');
+    const w = 500, h = 140, pad = 24;
+
+    const totalH = 12; // show 12h window
+    const points = [];
+    const stepMin = 5;
+
+    const drinkingWindow = Math.min((driveMin - startMin < 0
+      ? (driveMin - startMin + 1440) / 60
+      : (driveMin - startMin) / 60), 4);
+    const chartDrinks = buildDrinkSchedule(drinks.length, drinkingWindow);
+
+    for (let t = 0; t <= totalH * 60; t += stepMin) {
+      const hours = t / 60;
+      const bac = computeBACAtTime(hours, chartDrinks, gramsPerDrink, r, W, beta);
+      points.push({ t: hours, bac });
+    }
+
+    const maxBAC = Math.max(0.6, ...points.map(p => p.bac)) * 1.15;
+    const xScale = t => pad + (t / totalH) * (w - 2 * pad);
+    const yScale = b => h - pad - (b / maxBAC) * (h - 2 * pad);
+
+    let html = '';
+
+    // Legal limit line
+    const limitY = yScale(legalLimit);
+    html += `<line x1="${pad}" y1="${limitY}" x2="${w-pad}" y2="${limitY}" stroke="#c0492a" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>`;
+    html += `<text x="${w-pad}" y="${limitY-4}" font-family="JetBrains Mono" font-size="9" fill="#c0492a" text-anchor="end">${legalLimit.toFixed(1)}‰ LIMIT</text>`;
+
+    // Axis
+    html += `<line x1="${pad}" y1="${h-pad}" x2="${w-pad}" y2="${h-pad}" stroke="#1a1814" stroke-width="1"/>`;
+
+    // Hour ticks
+    for (let i = 0; i <= totalH; i += 2) {
+      const x = xScale(i);
+      html += `<line x1="${x}" y1="${h-pad}" x2="${x}" y2="${h-pad+3}" stroke="#1a1814" stroke-width="1"/>`;
+      html += `<text x="${x}" y="${h-pad+13}" font-family="JetBrains Mono" font-size="8" fill="#1a1814" text-anchor="middle" opacity="0.6">+${i}h</text>`;
+    }
+
+    // BAC curve
+    let path = '';
+    points.forEach((p, i) => {
+      const x = xScale(p.t);
+      const y = yScale(p.bac);
+      path += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+    });
+    // Fill area
+    const fillPath = path + `L${xScale(totalH)},${h-pad} L${pad},${h-pad} Z`;
+    html += `<path d="${fillPath}" fill="#c0492a" opacity="0.12"/>`;
+    html += `<path d="${path}" fill="none" stroke="#1a1814" stroke-width="2"/>`;
+
+    // Peak BAC marker
+    if (drinks.length > 0 && peakBAC > 0) {
+      const peakX = xScale(peakT);
+      const peakY = yScale(peakBAC);
+      html += `<line x1="${pad}" y1="${peakY}" x2="${w-pad}" y2="${peakY}" stroke="#5a6f4e" stroke-width="1" stroke-dasharray="3,3" opacity="0.7"/>`;
+      html += `<circle cx="${peakX}" cy="${peakY}" r="4" fill="#5a6f4e"/>`;
+      html += `<text x="${w-pad}" y="${peakY-4}" font-family="JetBrains Mono" font-size="9" fill="#5a6f4e" text-anchor="end">PEAK ${peakBAC.toFixed(1)}‰</text>`;
+    }
+
+    // Drive time marker
+    let driveH = (driveMin - startMin) / 60;
+    if (driveH < 0) driveH += 24;
+    if (driveH >= 0 && driveH <= totalH) {
+      const dx = xScale(driveH);
+      html += `<line x1="${dx}" y1="${pad}" x2="${dx}" y2="${h-pad}" stroke="#d9a441" stroke-width="2"/>`;
+      html += `<circle cx="${dx}" cy="${pad+4}" r="3" fill="#d9a441"/>`;
+      html += `<text x="${dx}" y="${pad-4}" font-family="JetBrains Mono" font-size="9" fill="#d9a441" text-anchor="middle" font-weight="700">DRIVE</text>`;
+    }
+
+    svg.innerHTML = html;
+  }
+
+  // Update clock
+  function updateClock() {
+    const now = new Date();
+    $('time-now').textContent = now.toTimeString().slice(0,5);
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // Bind all inputs
+  document.querySelectorAll('input').forEach(el => {
+    el.addEventListener('input', compute);
+  });
+
+  compute();
+</script>
+
+</body>
+</html>
